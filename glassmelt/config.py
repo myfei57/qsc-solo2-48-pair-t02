@@ -46,6 +46,9 @@ class FurnaceLimits:
 
     level_target_mm: float
     level_band_mm: float
+    level_agree_mm: float
+    level_plausible_max_mm: float
+    level_frozen_count: int
     melt_temp_target_c: float
     melt_temp_min_c: float
     melt_temp_max_c: float
@@ -56,6 +59,9 @@ class FurnaceLimits:
         limits = cls(
             level_target_mm=_number(section, "level_target_mm", minimum=0.0),
             level_band_mm=_number(section, "level_band_mm", minimum=0.0),
+            level_agree_mm=_number(section, "level_agree_mm", minimum=0.0),
+            level_plausible_max_mm=_number(section, "level_plausible_max_mm", minimum=0.0),
+            level_frozen_count=int(_number(section, "level_frozen_count", minimum=2.0)),
             melt_temp_target_c=_number(section, "melt_temp_target_c"),
             melt_temp_min_c=_number(section, "melt_temp_min_c"),
             melt_temp_max_c=_number(section, "melt_temp_max_c"),
@@ -63,6 +69,12 @@ class FurnaceLimits:
         )
         if limits.level_band_mm <= 0:
             raise ConfigError("液面允许带必须为正", component="config")
+        if limits.level_agree_mm <= 0:
+            raise ConfigError("双路液面一致判据必须为正", component="config")
+        if limits.level_agree_mm > limits.level_band_mm:
+            raise ConfigError("双路液面一致判据不能宽于液面允许带", component="config")
+        if limits.level_plausible_max_mm <= limits.level_target_mm + limits.level_band_mm:
+            raise ConfigError("液面物理可信上限必须高于允许带上沿", component="config")
         if not limits.melt_temp_min_c < limits.melt_temp_target_c < limits.melt_temp_max_c:
             raise ConfigError("熔化温度必须满足 下限 < 目标 < 上限", component="config")
         if limits.draft_target_pa >= 0:
@@ -402,6 +414,9 @@ def default_config() -> PlatformConfig:
         furnace=FurnaceLimits(
             level_target_mm=1120.0,
             level_band_mm=35.0,
+            level_agree_mm=25.0,
+            level_plausible_max_mm=1600.0,
+            level_frozen_count=6,
             melt_temp_target_c=1425.0,
             melt_temp_min_c=1380.0,
             melt_temp_max_c=1470.0,
@@ -468,6 +483,9 @@ def config_to_mapping(cfg: PlatformConfig) -> dict:
             "furnace": {
                 "level_target_mm": cfg.furnace.level_target_mm,
                 "level_band_mm": cfg.furnace.level_band_mm,
+                "level_agree_mm": cfg.furnace.level_agree_mm,
+                "level_plausible_max_mm": cfg.furnace.level_plausible_max_mm,
+                "level_frozen_count": cfg.furnace.level_frozen_count,
                 "melt_temp_target_c": cfg.furnace.melt_temp_target_c,
                 "melt_temp_min_c": cfg.furnace.melt_temp_min_c,
                 "melt_temp_max_c": cfg.furnace.melt_temp_max_c,

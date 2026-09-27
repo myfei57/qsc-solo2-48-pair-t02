@@ -117,6 +117,25 @@ class ConsoleAPI:
         reason = str(payload.get("reason", "控制台触发的出料清炉"))
         return self._guard(lambda: self.platform.clear_furnace(reason))
 
+    def inject_level(self, payload: dict) -> dict:
+        """注入单路液面读数或置位变送器自诊断（故障演练用）。"""
+
+        channel = str(payload.get("channel", "probe"))
+        if "faulty" in payload:
+            faulty = bool(payload.get("faulty"))
+            reason = str(payload.get("reason", "控制台注入的通道故障"))
+            return self._guard(lambda: self.platform.flag_level_channel(channel, faulty, reason))
+        value = float(payload.get("value_mm", self.platform.config.furnace.level_target_mm))
+        return self._guard(lambda: self.platform.inject_level_reading(channel, value))
+
+    def release_level(self, payload: dict) -> dict:
+        """双路液面打架持留的人工放行。"""
+
+        note = str(payload.get("note", "控制台签发的现场核实放行"))
+        trust = payload.get("trust")
+        trust = str(trust) if trust is not None else None
+        return self._guard(lambda: self.platform.release_level_hold(note=note, trust=trust))
+
     def release_ignition_latch(self, payload: dict) -> dict:
         return self._guard(lambda: self.platform.release_ignition_latch())
 

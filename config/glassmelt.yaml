@@ -6,6 +6,9 @@ limits:
   furnace:
     level_target_mm: 1120.0
     level_band_mm: 35.0
+    level_agree_mm: 25.0
+    level_plausible_max_mm: 1600.0
+    level_frozen_count: 6
     melt_temp_target_c: 1425.0
     melt_temp_min_c: 1380.0
     melt_temp_max_c: 1470.0

@@ -101,6 +101,18 @@ class Charger:
     def _charge(self, level, path: str) -> ChargeOutcome:
         check = level.check()
         if not check.ok:
+            if check.status == "no_signal":
+                reason = "两路液面测量均不可信，禁止投料，请检修测量通道"
+            elif check.hold:
+                reason = (
+                    f"双路液面测量互相矛盾（相差 {check.diff_mm:.1f} mm），"
+                    "已挂起自动投料，请到现场核实后放行"
+                )
+            else:
+                reason = (
+                    f"液面 {check.level_mm:.1f} mm 未在允许带内"
+                    f"（目标 {check.target_mm:.1f} ± {check.band_mm:.1f} mm），禁止投料"
+                )
             self._bus.publish(
                 Event.of(
                     "batch",
@@ -112,13 +124,12 @@ class Charger:
                     level_mm=round(check.level_mm, 3),
                     level_epoch=check.epoch,
                     high=check.high,
+                    status=check.status,
+                    hold=check.hold,
+                    untrusted=check.untrusted,
                 )
             )
-            raise InterlockError(
-                f"液面 {check.level_mm:.1f} mm 未在允许带内"
-                f"（目标 {check.target_mm:.1f} ± {check.band_mm:.1f} mm），禁止投料",
-                component="batch",
-            )
+            raise InterlockError(reason, component="batch")
         batch_kg = self._limits.charge_batch_kg
         with self._lock:
             self._charged_kg += batch_kg
@@ -146,6 +157,9 @@ class Charger:
                 level_mm=round(check.level_mm, 3),
                 level_epoch=check.epoch,
                 path=path,
+                level_status=check.status,
+                level_untrusted=check.untrusted,
+                level_released=check.released,
             )
         )
         return outcome

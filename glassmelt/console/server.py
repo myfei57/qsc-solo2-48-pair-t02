@@ -113,6 +113,10 @@ class ConsoleRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self.api.rebuild_zone_map(payload))
             elif parsed.path == "/api/furnace/clear":
                 self._send_json(self.api.clear_furnace(payload))
+            elif parsed.path == "/api/furnace/level/inject":
+                self._send_json(self.api.inject_level(payload))
+            elif parsed.path == "/api/furnace/level/release":
+                self._send_json(self.api.release_level(payload))
             elif parsed.path == "/api/burner/release":
                 self._send_json(self.api.release_ignition_latch(payload))
             elif parsed.path == "/api/scale/calibrate":

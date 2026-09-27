@@ -185,6 +185,7 @@ class Platform:
             ("batch", "charger", "batch-charger"),
             ("batch", "scale", "batch-scale"),
             ("furnace", "level", "glass-level-probe"),
+            ("furnace", "level_radar", "radar-level-transmitter"),
             ("furnace", "melt_temp", "thermocouple"),
             ("furnace", "draft", "draft-fan"),
             ("burner", "air", "combustion-air-fan"),
@@ -420,6 +421,34 @@ class Platform:
         self.charger.interrupt(reason)
         return {"interrupted": self.charger.interrupted, "reason": reason}
 
+    def release_level_hold(self, note: str = "现场核实后放行", trust: str | None = None) -> dict:
+        """双路液面打架持留的人工放行：操作员到现场核实后签发。"""
+
+        with self._lock:
+            return self.level.release_hold(note=note, trust=trust)
+
+    def inject_level_reading(self, channel: str, value_mm: float) -> dict:
+        """模拟单路液面变送器来数（联调与故障演练用）。"""
+
+        with self._lock:
+            value = self.level.observe_channel(channel, value_mm)
+            return {
+                "channel": channel,
+                "value_mm": round(value, 3),
+                "level": self.level.snapshot(),
+            }
+
+    def flag_level_channel(self, channel: str, faulty: bool, reason: str = "") -> dict:
+        """模拟液面变送器自诊断位置位／复位。"""
+
+        with self._lock:
+            self.level.set_channel_fault(channel, faulty, reason)
+            return {
+                "channel": channel,
+                "faulty": faulty,
+                "level": self.level.snapshot(),
+            }
+
     def ignite_burner(self, flame_temperature_c: float) -> dict:
         with self._lock:
             return self.igniter.ignite(flame_temperature_c)
@@ -638,6 +667,8 @@ class Platform:
                 "/api/scale/calibrate",
                 "/api/furnace/clear",
                 "/api/furnace/rebuild",
+                "/api/furnace/level/inject",
+                "/api/furnace/level/release",
                 "/api/cycle",
                 "/api/start",
                 "/api/stop",
