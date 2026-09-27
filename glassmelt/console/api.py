@@ -117,6 +117,45 @@ class ConsoleAPI:
         reason = str(payload.get("reason", "控制台触发的出料清炉"))
         return self._guard(lambda: self.platform.clear_furnace(reason))
 
+    def observe_level(self, payload: dict) -> dict:
+        """送入液面测量：level_mm 必填，channel 缺省表示两路同值。"""
+
+        level_mm = float(payload["level_mm"])
+        raw_channel = payload.get("channel")
+        channel = str(raw_channel) if raw_channel is not None else None
+        return self._guard(lambda: self.platform.observe_level(level_mm, channel))
+
+    def mark_level_coating(self, payload: dict) -> dict:
+        """把一路液面测量挂牌为结料挂料。"""
+
+        channel = str(payload.get("channel", "probe"))
+        reason = str(payload.get("reason", "控制台挂牌结料"))
+        return self._guard(
+            lambda: self.platform.mark_level_channel_coating(channel, reason)
+        )
+
+    def reset_level_channel(self, payload: dict) -> dict:
+        """维护后让一路液面测量重新参与互校。"""
+
+        channel = str(payload.get("channel", "probe"))
+        reason = str(payload.get("reason", "控制台维护复位"))
+        return self._guard(lambda: self.platform.reset_level_channel(channel, reason))
+
+    def release_level_disagreement(self, payload: dict) -> dict:
+        """两路打架、人到现场确认后签发一次性投料放行凭据。"""
+
+        issued_by = str(payload.get("issued_by", ""))
+        reason = str(payload.get("reason", ""))
+        try:
+            observed_mm = float(payload.get("observed_mm"))
+        except (TypeError, ValueError):
+            raise ValueError("现场放行必须提供数值型 observed_mm")
+        return self._guard(
+            lambda: self.platform.release_level_disagreement(
+                issued_by, reason, observed_mm
+            )
+        )
+
     def release_ignition_latch(self, payload: dict) -> dict:
         return self._guard(lambda: self.platform.release_ignition_latch())
 

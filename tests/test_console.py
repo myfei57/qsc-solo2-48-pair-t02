@@ -132,3 +132,54 @@ def test_console_api_wraps_zone_and_calibration_actions(platform):
     assert calibrated["result"]["fresh"] is True
     cleared = api.clear_furnace({})
     assert cleared["result"]["charger"]["interrupted"] is True
+
+
+def test_level_vote_and_disagreement_release_over_http(console):
+    _server, base = console
+    _post(f"{base}/api/start")
+    target = 1120.0
+    status, payload = _post(f"{base}/api/furnace/level", {"level_mm": target + 8.0})
+    assert status == 200 and payload["result"]["vote"]["mode"] == "agree"
+    status, payload = _post(
+        f"{base}/api/furnace/level", {"channel": "probe", "level_mm": target + 50.0}
+    )
+    assert payload["result"]["vote"]["mode"] == "disagreed"
+    status, blocked = _post(f"{base}/api/batch/start", {"path": "start"})
+    assert blocked["ok"] is False
+    # 缺现场实测液位直接 400。
+    status, bad = _post(f"{base}/api/furnace/level/release", {})
+    assert status == 400
+    # 有实测液位但未登记操作人：进入门控后被拒。
+    status, rejected = _post(
+        f"{base}/api/furnace/level/release", {"observed_mm": target + 6.0}
+    )
+    assert rejected["ok"] is False
+    status, released = _post(
+        f"{base}/api/furnace/level/release",
+        {"issued_by": "赵工", "reason": "目视在带内，按雷达放行一批",
+         "observed_mm": target + 6.0},
+    )
+    assert released["ok"] is True
+    assert released["result"]["release"]["issued_by"] == "赵工"
+    status, charged = _post(f"{base}/api/batch/start", {"path": "start"})
+    assert charged["ok"] is True
+    assert charged["result"]["manual_release"] is True
+    status, blocked_again = _post(f"{base}/api/batch/start", {"path": "start"})
+    assert blocked_again["ok"] is False
+
+
+def test_level_channel_coating_and_reset_over_http(console):
+    _server, base = console
+    _post(f"{base}/api/start")
+    target = 1120.0
+    _post(f"{base}/api/furnace/level", {"level_mm": target - 10.0})
+    status, payload = _post(
+        f"{base}/api/furnace/level/coating",
+        {"channel": "probe", "reason": "挂料挂牌"},
+    )
+    assert payload["result"]["mode"] == "degraded"
+    assert payload["result"]["suspect_channel"] == "probe"
+    _post(f"{base}/api/furnace/level/reset", {"channel": "probe", "reason": "清料"})
+    _post(f"{base}/api/furnace/level", {"level_mm": target - 8.0})
+    status, state = _get(f"{base}/api/state")
+    assert state["level"]["vote"]["mode"] == "agree"

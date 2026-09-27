@@ -6,6 +6,14 @@ limits:
   furnace:
     level_target_mm: 1120.0
     level_band_mm: 35.0
+    level_vote_tolerance_mm: 12.0
+    level_spike_mm: 50.0
+    level_stuck_span_s: 120.0
+    level_stuck_deadband_mm: 2.0
+    level_stale_s: 30.0
+    level_min_mm: 900.0
+    level_max_mm: 1300.0
+    level_release_window_s: 180.0
     melt_temp_target_c: 1425.0
     melt_temp_min_c: 1380.0
     melt_temp_max_c: 1470.0

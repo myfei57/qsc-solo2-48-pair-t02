@@ -113,6 +113,14 @@ class ConsoleRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self.api.rebuild_zone_map(payload))
             elif parsed.path == "/api/furnace/clear":
                 self._send_json(self.api.clear_furnace(payload))
+            elif parsed.path == "/api/furnace/level":
+                self._send_json(self.api.observe_level(payload))
+            elif parsed.path == "/api/furnace/level/coating":
+                self._send_json(self.api.mark_level_coating(payload))
+            elif parsed.path == "/api/furnace/level/reset":
+                self._send_json(self.api.reset_level_channel(payload))
+            elif parsed.path == "/api/furnace/level/release":
+                self._send_json(self.api.release_level_disagreement(payload))
             elif parsed.path == "/api/burner/release":
                 self._send_json(self.api.release_ignition_latch(payload))
             elif parsed.path == "/api/scale/calibrate":

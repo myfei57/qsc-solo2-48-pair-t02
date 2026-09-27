@@ -85,6 +85,40 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     platform.interrupt_charging("演示用投料联锁")
     platform.level.observe(config.furnace.level_target_mm - 12.0)
     resume = platform.start_charging(path="resume")
+    # 情形一（单路坏）：探针单点跳到高液位被锁为不可信，门控降级采信雷达，
+    # 投料不停，记录里标明哪一路不可信；随后维护复位探针。
+    platform.level.observe(config.furnace.level_target_mm + 8.0)
+    platform.level.observe_channel("probe", config.furnace.level_target_mm + 64.0)
+    degraded_vote = platform.level.snapshot()["vote"]
+    degraded_charge = platform.start_charging(path="start")
+    probe_reset = platform.reset_level_channel("probe", "清挂料后复位")
+    platform.level.observe(config.furnace.level_target_mm + 8.0)
+    # 情形二（两路打架）：两路都健康但读数打架且高低判定相反，停自动投料；
+    # 人到现场核认后签发一次性放行（本拍采信雷达），放行后恢复一批投料。
+    platform.level.observe_channel("probe", config.furnace.level_target_mm + 50.0)
+    disagreement = platform.level.snapshot()["vote"]
+    blocked = None
+    if disagreement["mode"] == "disagreed":
+        try:
+            platform.start_charging(path="start")
+        except GlassMeltError as error:
+            blocked = error.as_record()
+    release = platform.release_level_disagreement(
+        "值班长-赵工",
+        "现场目视液面在允许带内，探针虚高，按雷达放行一批",
+        config.furnace.level_target_mm + 6.0,
+    )
+    released_charge = platform.start_charging(path="start")
+    # 放行凭据一次性：分歧未消除的下一拍不能再自动投料，须重新现场确认。
+    second_blocked = None
+    if platform.level.snapshot()["vote"]["mode"] == "disagreed":
+        try:
+            platform.start_charging(path="start")
+        except GlassMeltError as error:
+            second_blocked = error.as_record()
+    # 两路重新一致，恢复自动投料。
+    platform.level.observe(config.furnace.level_target_mm - 10.0)
+    rearmed_charge = platform.start_charging(path="start")
     reignition = platform.reignite_burner(platform.furnace_temp.target_c + 25.0, "演示用失焰")
     rebuilt = platform.rebuild_zone_map(
         {zone: f"burner-{index + 7}" for index, zone in enumerate(platform.zones.zones())},
@@ -110,6 +144,16 @@ def _cmd_demo(args: argparse.Namespace) -> int:
         "cycles_run": len(cycles),
         "last_cycle": cycles[-1] if cycles else None,
         "resume": resume,
+        "single_channel_degraded": degraded_vote,
+        "degraded_charge": degraded_charge,
+        "probe_reset": probe_reset,
+        "level_disagreement": disagreement,
+        "charge_blocked_when_disagreed": blocked,
+        "site_release": release,
+        "released_charge": released_charge,
+        "second_charge_blocked": second_blocked,
+        "probe_reset": probe_reset,
+        "rearmed_charge": rearmed_charge,
         "reignition": reignition,
         "zone_map": rebuilt,
         "trip": trip,

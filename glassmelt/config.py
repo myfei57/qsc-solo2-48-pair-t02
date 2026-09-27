@@ -46,6 +46,14 @@ class FurnaceLimits:
 
     level_target_mm: float
     level_band_mm: float
+    level_vote_tolerance_mm: float
+    level_spike_mm: float
+    level_stuck_span_s: float
+    level_stuck_deadband_mm: float
+    level_stale_s: float
+    level_min_mm: float
+    level_max_mm: float
+    level_release_window_s: float
     melt_temp_target_c: float
     melt_temp_min_c: float
     melt_temp_max_c: float
@@ -56,6 +64,20 @@ class FurnaceLimits:
         limits = cls(
             level_target_mm=_number(section, "level_target_mm", minimum=0.0),
             level_band_mm=_number(section, "level_band_mm", minimum=0.0),
+            level_vote_tolerance_mm=_number(
+                section, "level_vote_tolerance_mm", minimum=0.0
+            ),
+            level_spike_mm=_number(section, "level_spike_mm", minimum=0.0),
+            level_stuck_span_s=_number(section, "level_stuck_span_s", minimum=0.0),
+            level_stuck_deadband_mm=_number(
+                section, "level_stuck_deadband_mm", minimum=0.0
+            ),
+            level_stale_s=_number(section, "level_stale_s", minimum=0.0),
+            level_min_mm=_number(section, "level_min_mm", minimum=0.0),
+            level_max_mm=_number(section, "level_max_mm", minimum=0.0),
+            level_release_window_s=_number(
+                section, "level_release_window_s", minimum=0.0
+            ),
             melt_temp_target_c=_number(section, "melt_temp_target_c"),
             melt_temp_min_c=_number(section, "melt_temp_min_c"),
             melt_temp_max_c=_number(section, "melt_temp_max_c"),
@@ -63,6 +85,20 @@ class FurnaceLimits:
         )
         if limits.level_band_mm <= 0:
             raise ConfigError("液面允许带必须为正", component="config")
+        if limits.level_vote_tolerance_mm <= 0:
+            raise ConfigError("双路液面互校公差必须为正", component="config")
+        if limits.level_spike_mm <= 0:
+            raise ConfigError("液面跳变阈值必须为正", component="config")
+        if limits.level_stuck_span_s <= 0:
+            raise ConfigError("液面冻结判据时间窗必须为正", component="config")
+        if limits.level_stuck_deadband_mm < 0:
+            raise ConfigError("液面冻结判据死区不得为负", component="config")
+        if limits.level_stale_s <= 0:
+            raise ConfigError("液面数据失效时限必须为正", component="config")
+        if not limits.level_min_mm < limits.level_target_mm < limits.level_max_mm:
+            raise ConfigError("液面量程必须满足 下限 < 目标 < 上限", component="config")
+        if limits.level_release_window_s <= 0:
+            raise ConfigError("现场放行凭据有效期必须为正", component="config")
         if not limits.melt_temp_min_c < limits.melt_temp_target_c < limits.melt_temp_max_c:
             raise ConfigError("熔化温度必须满足 下限 < 目标 < 上限", component="config")
         if limits.draft_target_pa >= 0:
@@ -402,6 +438,14 @@ def default_config() -> PlatformConfig:
         furnace=FurnaceLimits(
             level_target_mm=1120.0,
             level_band_mm=35.0,
+            level_vote_tolerance_mm=12.0,
+            level_spike_mm=50.0,
+            level_stuck_span_s=120.0,
+            level_stuck_deadband_mm=2.0,
+            level_stale_s=30.0,
+            level_min_mm=900.0,
+            level_max_mm=1300.0,
+            level_release_window_s=180.0,
             melt_temp_target_c=1425.0,
             melt_temp_min_c=1380.0,
             melt_temp_max_c=1470.0,
@@ -468,6 +512,14 @@ def config_to_mapping(cfg: PlatformConfig) -> dict:
             "furnace": {
                 "level_target_mm": cfg.furnace.level_target_mm,
                 "level_band_mm": cfg.furnace.level_band_mm,
+                "level_vote_tolerance_mm": cfg.furnace.level_vote_tolerance_mm,
+                "level_spike_mm": cfg.furnace.level_spike_mm,
+                "level_stuck_span_s": cfg.furnace.level_stuck_span_s,
+                "level_stuck_deadband_mm": cfg.furnace.level_stuck_deadband_mm,
+                "level_stale_s": cfg.furnace.level_stale_s,
+                "level_min_mm": cfg.furnace.level_min_mm,
+                "level_max_mm": cfg.furnace.level_max_mm,
+                "level_release_window_s": cfg.furnace.level_release_window_s,
                 "melt_temp_target_c": cfg.furnace.melt_temp_target_c,
                 "melt_temp_min_c": cfg.furnace.melt_temp_min_c,
                 "melt_temp_max_c": cfg.furnace.melt_temp_max_c,

@@ -51,6 +51,16 @@ async function act(path, payload) {
   document.getElementById('out-action').textContent = JSON.stringify(result, null, 2);
   refresh();
 }
+async function releaseLevel() {
+  const issuedBy = prompt('谁到现场核认的液面？（操作人）');
+  if (!issuedBy) { return; }
+  const observed = prompt('现场实测液面是多少毫米？（按此值做投料门控）');
+  if (observed === null) { return; }
+  const reason = prompt('现场核认结论与放行理由：');
+  if (!reason) { return; }
+  await act('/api/furnace/level/release',
+    {issued_by: issuedBy, reason: reason, observed_mm: Number(observed)});
+}
 window.addEventListener('DOMContentLoaded', () => {
   refresh();
   setInterval(refresh, 5000);
@@ -83,6 +93,14 @@ def _operations(path: str) -> str:
             "<button onclick=\"act('/api/burner/ignite', {path: 'ignite'})\">点火</button>"
             "<button onclick=\"act('/api/burner/ignite', {path: 'reignite', reason: '控制台'})\">重新点火</button>"
             "<pre id='out-action'>等待操作</pre></section>"
+            "<section><h2>液面双路互校</h2>"
+            "<p style='font-size:12px;color:#b99d85'>两路打架时禁止自动投料：先到现场核认，"
+            "登记操作人与确认说明后放行（放行只对随后一次投料有效）。</p>"
+            "<button onclick=\"releaseLevel()\">现场确认后放行投料</button>"
+            "<button onclick=\"act('/api/furnace/level/coating', {channel: 'probe', reason: '现场挂牌'})\">探针结料挂牌</button>"
+            "<button onclick=\"act('/api/furnace/level/reset', {channel: 'probe'})\">探针维护复位</button>"
+            "<button onclick=\"act('/api/furnace/level/reset', {channel: 'radar'})\">雷达维护复位</button>"
+            "</section>"
             "<section><h2>供料与成型</h2>"
             "<button onclick=\"act('/api/forehearth/gate', {path: 'warm_up'})\">开闸板</button>"
             "<button onclick=\"act('/api/forehearth/gate', {path: 'reheat'})\">再升温开闸板</button>"

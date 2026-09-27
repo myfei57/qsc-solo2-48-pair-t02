@@ -185,6 +185,7 @@ class Platform:
             ("batch", "charger", "batch-charger"),
             ("batch", "scale", "batch-scale"),
             ("furnace", "level", "glass-level-probe"),
+            ("furnace", "level_radar", "radar-level-gauge"),
             ("furnace", "melt_temp", "thermocouple"),
             ("furnace", "draft", "draft-fan"),
             ("burner", "air", "combustion-air-fan"),
@@ -325,7 +326,9 @@ class Platform:
 
             self.level.drift(-7.0 * state.pull_rate - 1.0 * state.dt)
             charge_kg = 0.0
-            if self.level.snapshot()["level_ok"]:
+            level_state = self.level.snapshot()
+            # 双路互校给出可信结论时才允许自动投料；两路打架／全盲一律等人工。
+            if level_state["vote"]["trusted"] and level_state["level_ok"]:
                 charge = self.charger.start(self.level)
                 charge_kg = charge.batch_kg
                 self.level.drift(9.0 * state.dt)
@@ -419,6 +422,48 @@ class Platform:
 
         self.charger.interrupt(reason)
         return {"interrupted": self.charger.interrupted, "reason": reason}
+
+    def observe_level(self, level_mm: float, channel: str | None = None) -> dict:
+        """送入液面测量；不指定通道时两路同值，指定时只喂一路。"""
+
+        if channel is not None and channel not in self.level.channels():
+            raise SequenceError(
+                f"未知的液面测量通道: {channel}（可选 probe / radar）",
+                component="furnace",
+            )
+        adopted = self.level.observe(level_mm, channel=channel)
+        return {"adopted_mm": round(adopted, 3), "vote": self.level.snapshot()["vote"]}
+
+    def mark_level_channel_coating(self, channel: str, reason: str = "现场挂牌结料") -> dict:
+        """把一路液面测量挂牌为结料挂料，本路退出互校。"""
+
+        if channel not in self.level.channels():
+            raise SequenceError(
+                f"未知的液面测量通道: {channel}（可选 probe / radar）",
+                component="furnace",
+            )
+        return self.level.mark_coating(channel, reason)
+
+    def reset_level_channel(self, channel: str, reason: str = "维护后恢复") -> dict:
+        """维护复位一路液面测量，让它重新参与互校。"""
+
+        if channel not in self.level.channels():
+            raise SequenceError(
+                f"未知的液面测量通道: {channel}（可选 probe / radar）",
+                component="furnace",
+            )
+        return self.level.reset_channel(channel, reason)
+
+    def release_level_disagreement(
+        self, issued_by: str, reason: str, observed_mm: float
+    ) -> dict:
+        """两路液面打架时，人到现场确认后签发一次性投料放行凭据。"""
+
+        release = self.level.release_for_site_check(issued_by, reason, observed_mm)
+        return {
+            "release": release.as_dict(),
+            "vote": self.level.snapshot()["vote"],
+        }
 
     def ignite_burner(self, flame_temperature_c: float) -> dict:
         with self._lock:
@@ -638,6 +683,10 @@ class Platform:
                 "/api/scale/calibrate",
                 "/api/furnace/clear",
                 "/api/furnace/rebuild",
+                "/api/furnace/level",
+                "/api/furnace/level/coating",
+                "/api/furnace/level/reset",
+                "/api/furnace/level/release",
                 "/api/cycle",
                 "/api/start",
                 "/api/stop",

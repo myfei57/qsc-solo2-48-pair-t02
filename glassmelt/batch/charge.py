@@ -26,6 +26,13 @@ class ChargeOutcome:
     level_epoch: int
     level_ok: bool
     at: float
+    level_mode: str = "agree"
+    level_mode_name: str = "双路一致"
+    trusted_channel: str | None = None
+    suspect_channel: str | None = None
+    divergence_mm: float | None = None
+    manual_release: bool = False
+    released_by: str | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -36,6 +43,15 @@ class ChargeOutcome:
             "level_epoch": self.level_epoch,
             "level_ok": self.level_ok,
             "at": round(self.at, 3),
+            "level_mode": self.level_mode,
+            "level_mode_name": self.level_mode_name,
+            "trusted_channel": self.trusted_channel,
+            "suspect_channel": self.suspect_channel,
+            "divergence_mm": (
+                round(self.divergence_mm, 3) if self.divergence_mm is not None else None
+            ),
+            "manual_release": self.manual_release,
+            "released_by": self.released_by,
         }
 
 
@@ -99,21 +115,14 @@ class Charger:
         )
 
     def _charge(self, level, path: str) -> ChargeOutcome:
-        check = level.check()
+        try:
+            check = level.check()
+        except InterlockError as error:
+            # 双路分歧／双盲时确认本身就拒绝；同样记一笔投料拒绝再上抛。
+            self._publish_rejected(path, level.last_confirmation(), reason=error.message)
+            raise
         if not check.ok:
-            self._bus.publish(
-                Event.of(
-                    "batch",
-                    "batch",
-                    "charge_rejected",
-                    subject="charger",
-                    severity="warning",
-                    path=path,
-                    level_mm=round(check.level_mm, 3),
-                    level_epoch=check.epoch,
-                    high=check.high,
-                )
-            )
+            self._publish_rejected(path, check)
             raise InterlockError(
                 f"液面 {check.level_mm:.1f} mm 未在允许带内"
                 f"（目标 {check.target_mm:.1f} ± {check.band_mm:.1f} mm），禁止投料",
@@ -131,6 +140,13 @@ class Charger:
                 level_epoch=check.epoch,
                 level_ok=check.ok,
                 at=check.checked_at,
+                level_mode=check.mode,
+                level_mode_name=check.mode_name,
+                trusted_channel=check.trusted_channel,
+                suspect_channel=check.suspect_channel,
+                divergence_mm=check.divergence_mm,
+                manual_release=check.manual_release,
+                released_by=check.released_by,
             )
             self._history.append(outcome.as_dict())
             if len(self._history) > 200:
@@ -145,10 +161,35 @@ class Charger:
                 batch_kg=round(batch_kg, 3),
                 level_mm=round(check.level_mm, 3),
                 level_epoch=check.epoch,
+                level_mode=check.mode,
+                trusted_channel=check.trusted_channel,
+                suspect_channel=check.suspect_channel,
+                manual_release=check.manual_release,
+                released_by=check.released_by,
                 path=path,
             )
         )
         return outcome
+
+    def _publish_rejected(self, path: str, check, reason: str | None = None) -> None:
+        level_mm = check.level_mm if check is not None else None
+        epoch = check.epoch if check is not None else None
+        mode = check.mode if check is not None else None
+        self._bus.publish(
+            Event.of(
+                "batch",
+                "batch",
+                "charge_rejected",
+                subject="charger",
+                severity="warning",
+                path=path,
+                level_mm=round(level_mm, 3) if level_mm is not None else None,
+                level_epoch=epoch,
+                level_mode=mode,
+                high=check.high if check is not None else None,
+                reason=reason,
+            )
+        )
 
     def history(self, limit: int = 5) -> list[dict]:
         with self._lock:
